@@ -1,0 +1,5 @@
+TAGS
+erl_crash.dump
+lib/
+rel/starterkit/
+tmp/starterkit/
