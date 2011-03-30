@@ -13,7 +13,7 @@ PLT=$(HOME)/.dialyzer_plt.$(OTPREL)
 DIALYZE_IGNORE_WARN?=dialyze-ignore-warnings.txt
 DIALYZE_NOSPEC_IGNORE_WARN?=dialyze-nospec-ignore-warnings.txt
 
-.PHONY: all test bootstrap-package check-package package generate download compile eunit build-plt check-plt dialyze dialyze-spec dialyze-nospec dialyze-eunit dialyze-eunit-spec dialyze-eunit-nospec ctags etags clean realclean distclean
+.PHONY: all test bootstrap-package check-package package generate download download-upstream compile eunit build-plt check-plt dialyze dialyze-spec dialyze-nospec dialyze-eunit dialyze-eunit-spec dialyze-eunit-nospec ctags etags clean realclean distclean
 
 all: compile
 
@@ -50,6 +50,18 @@ generate: clean compile
 download:
 	@echo "downloading: $(RELPKG) ..."
 	./rebar get-deps
+
+download-upstream: download
+	@echo "downloading upstream: $(RELPKG) rebar ..."
+	(cd ./lib/rebar; git remote rm upstream 2> /dev/null; git remote add upstream -f --tags git://github.com/basho/rebar.git)
+	@echo "downloading upstream: $(RELPKG) edown ..."
+	(cd ./lib/edown; git remote rm upstream 2> /dev/null; git remote add upstream -f --tags git://github.com/esl/edown.git)
+	@echo "downloading upstream: $(RELPKG) eper ..."
+	(cd ./lib/eper; git remote rm upstream 2> /dev/null; git remote add upstream -f --tags git://github.com/massemanet/eper.git)
+	@echo "downloading upstream: $(RELPKG) meck ..."
+	(cd ./lib/meck; git remote rm upstream 2> /dev/null; git remote add upstream -f --tags git://github.com/eproxus/meck.git)
+	@echo "downloading upstream: $(RELPKG) proper ..."
+	(cd ./lib/proper; git remote rm upstream 2> /dev/null; git remote add upstream -f --tags git://github.com/manopapad/proper.git)
 
 compile:
 	@echo "compiling: $(RELPKG) ..."
