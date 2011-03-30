@@ -69,7 +69,12 @@ compile:
 
 eunit: compile
 	@echo "eunit testing: $(RELPKG) ..."
-	./rebar eunit
+#DISABLED ./rebar eunit
+	(cd ./lib/rebar; ../../rebar eunit)
+	(cd ./lib/edown; ../../rebar eunit)
+	(cd ./lib/eper; ../../rebar eunit)
+	(cd ./lib/meck; ../../rebar eunit)
+	(cd ./lib/proper; ../../rebar eunit)
 
 build-plt: $(PLT)
 
