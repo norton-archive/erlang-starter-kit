@@ -7,6 +7,4 @@ Automatically generate the init.erl file.
 Use a versioned directory structure for adding to code path in the
 init.erl file.
 
-Add eqcmini tool.
-
 Add Serge's user tools.
