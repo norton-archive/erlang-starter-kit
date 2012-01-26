@@ -35,7 +35,8 @@ endif
 	dialyze-eqc dialyze-eqc-spec dialyze-eqc-nospec \
 	dialyze-proper dialyze-proper-spec dialyze-proper-nospec \
 	ctags etags \
-	clean realclean distclean
+	clean realclean distclean \
+	otp_make_release_tests otp_run_release_tests
 
 all: compile
 
@@ -136,7 +137,7 @@ dialyze-spec: build-plt clean compile
 
 dialyze-nospec: build-plt clean compile
 	@echo "dialyzing w/o spec: $(RELPKG) ..."
-	dialyzer --plt $(PLT) --no_spec -r ./lib | fgrep -v -f $(DIALYZE_NOSPEC_IGNORE_WARN)
+	dialyzer --plt $(PLT) --no_spec -Wno_undefined_callbacks -r ./lib | fgrep -v -f $(DIALYZE_NOSPEC_IGNORE_WARN)
 
 dialyze-eunit: dialyze-eunit-spec
 
@@ -148,7 +149,7 @@ dialyze-eunit-spec: build-plt clean eunit-compile
 dialyze-eunit-nospec: build-plt clean eunit-compile
 	@echo "dialyzing .eunit w/o spec: $(RELPKG) ..."
 	./rebar eunit-compile
-	dialyzer --plt $(PLT) --no_spec -r `find ./lib -name .eunit -print | xargs echo` | fgrep -v -f $(DIALYZE_NOSPEC_IGNORE_WARN)
+	dialyzer --plt $(PLT) --no_spec -Wno_undefined_callbacks -r `find ./lib -name .eunit -print | xargs echo` | fgrep -v -f $(DIALYZE_NOSPEC_IGNORE_WARN)
 
 dialyze-eqc: dialyze-eqc-spec
 
@@ -160,7 +161,7 @@ dialyze-eqc-spec: build-plt clean eqc-compile
 dialyze-eqc-nospec: build-plt clean eqc-compile
 	@echo "dialyzing .eqc w/o spec: $(RELPKG) ..."
 	./rebar eqc-compile
-	dialyzer --plt $(PLT) --no_spec -r `find ./lib -name .eunit -print | xargs echo` | fgrep -v -f $(DIALYZE_NOSPEC_IGNORE_WARN)
+	dialyzer --plt $(PLT) --no_spec -Wno_undefined_callbacks -r `find ./lib -name .eunit -print | xargs echo` | fgrep -v -f $(DIALYZE_NOSPEC_IGNORE_WARN)
 
 dialyze-proper: dialyze-proper-spec
 
@@ -172,7 +173,7 @@ dialyze-proper-spec: build-plt clean proper-compile
 dialyze-proper-nospec: build-plt clean proper-compile
 	@echo "dialyzing .proper w/o spec: $(RELPKG) ..."
 	./rebar proper-compile
-	dialyzer --plt $(PLT) --no_spec -r `find ./lib -name .eunit -print | xargs echo` | fgrep -v -f $(DIALYZE_NOSPEC_IGNORE_WARN)
+	dialyzer --plt $(PLT) --no_spec -Wno_undefined_callbacks -r `find ./lib -name .eunit -print | xargs echo` | fgrep -v -f $(DIALYZE_NOSPEC_IGNORE_WARN)
 
 ctags:
 	find ./lib -name "*.[he]rl" -print | fgrep -v .eunit | ctags -
@@ -227,14 +228,14 @@ $(PLT):
 		xmerl
 
 otp: otp.git
-	make -C otp.git install
+	make -C $(CURDIR)/otp.git install
 
 otp.git:
 	rm -rf $(CURDIR)/otp
 	mkdir -p $(CURDIR)/otp
 	git clone git://github.com/erlang/otp.git otp.git
-	(cd otp.git && \
-		git co OTP_R15A && \
+	(cd $(CURDIR)/otp.git && \
+		git co OTP_R15B && \
 		./otp_build autoconf && \
 		./configure \
 			--disable-hipe \
@@ -246,16 +247,41 @@ otp.git:
 			--enable-smp-support \
 			$(otp_configure_flags) \
 			--prefix=$(CURDIR)/otp)
-	make -C otp.git
+	make -C $(CURDIR)/otp.git
 
 otp-debug: otp.git
-	env ERL_TOP=$(PWD)/otp.git make -C ./otp.git/erts/emulator debug FLAVOR=smp
+	env ERL_TOP=$(CURDIR)/otp.git make -C otp.git/erts/emulator debug FLAVOR=smp
 
 otp-valgrind: otp.git
-	env ERL_TOP=$(PWD)/otp.git make -C ./otp.git/erts/emulator valgrind FLAVOR=smp
+	env ERL_TOP=$(CURDIR)/otp.git make -C otp.git/erts/emulator valgrind FLAVOR=smp
 
 cerl-debug: otp.git
-	env ERL_TOP=$(PWD)/otp.git ./otp.git/bin/cerl -debug
+	env ERL_TOP=$(CURDIR)/otp.git otp.git/bin/cerl -debug
 
 cerl-valgrind: otp.git
-	env ERL_TOP=$(PWD)/otp.git ./otp.git/bin/cerl -valgrind
+	env ERL_TOP=$(CURDIR)/otp.git otp.git/bin/cerl -valgrind
+
+## See https://github.com/erlang/otp/wiki/Running-tests for details
+otp_make_release_tests: otp.git
+	rm -rf otp.git/release/tests
+	env ERL_TOP=$(CURDIR)/otp.git ERL_LIBS=$(CURDIR)/otp.git/lib \
+		make -C otp.git release_tests
+
+otp_run_release_tests: otp_make_release_tests
+	@echo ""
+	@echo "** Warning killing all local beam, beam.smp, and epmd programs **"
+	@echo ""
+	sleep 10
+	killall -q -9 beam || true
+	killall -q -9 beam.smp || true
+	killall -q -9 epmd || true
+	@echo ""
+	@echo "** Open '$(CURDIR)/otp.git/release/tests/test_server/index.html' in your browser**"
+	@echo ""
+	sleep 10
+	(cd $(CURDIR)/otp.git/release/tests/test_server && \
+		env ERL_TOP=$(CURDIR)/otp.git ERL_LIBS=$(CURDIR)/otp.git/lib \
+			$(CURDIR)/otp.git/bin/erl \
+				-s ts install \
+				-s ts run \
+				-s erlang halt)
