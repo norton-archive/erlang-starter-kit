@@ -20,7 +20,7 @@ started as a developer.
 3. Move the directory containing this file to "~/.erlang.d". (If you
    already have a directory at ~/.erlang.d move it out of the way and
    put this there instead.)
-4. Download (i.e. make -C ~/.erlang.d download) the Starter Kit's
+4. Download (i.e. make -C ~/.erlang.d deps) the Starter Kit's
    Dependencies.
 5. Build (i.e. make -C ~/.erlang.d) the Starter Kit.
 6. Make (i.e. ln -s ~/.erlang.d/init.erl ~/.erlang) a symbolic link to

@@ -1,8 +1,7 @@
 %%% -*- mode: erlang -*-
 
-true = code:add_pathz(os:getenv("HOME")++"/.erlang.d/lib/edown/ebin").
-true = code:add_pathz(os:getenv("HOME")++"/.erlang.d/lib/eper/ebin").
-%%true = code:add_pathz(os:getenv("HOME")++"/.erlang.d/lib/eqc/ebin").
-true = code:add_pathz(os:getenv("HOME")++"/.erlang.d/lib/meck/ebin").
-true = code:add_pathz(os:getenv("HOME")++"/.erlang.d/lib/proper/ebin").
-true = code:add_pathz(os:getenv("HOME")++"/.erlang.d/lib/qc/ebin").
+true = code:add_pathz(os:getenv("HOME")++"/.erlang.d/deps/eper/ebin").
+true = code:add_pathz(os:getenv("HOME")++"/.erlang.d/deps/meck/ebin").
+true = code:add_pathz(os:getenv("HOME")++"/.erlang.d/deps/proper/ebin").
+true = code:add_pathz(os:getenv("HOME")++"/.erlang.d/deps/triq/ebin").
+true = code:add_pathz(os:getenv("HOME")++"/.erlang.d/deps/qc/ebin").

@@ -1,22 +1,26 @@
-DIST?=dev
-VSN?=$(shell grep '{rel, "starterkit"' rel/reltool.config | sed 's/^.*rel, "starterkit", "\(.*\)",/\1/')
-ARCH=$(shell erl -noshell -eval 'io:format(erlang:system_info(system_architecture)), halt().')
-WORDSIZE=$(shell erl -noshell -eval 'io:format(integer_to_list(erlang:system_info(wordsize)*8)), halt().')
 
-RELPKG=starterkit-$(VSN)-$(DIST)-$(ARCH)-$(WORDSIZE)
-RELTGZ=$(RELPKG).tgz
-RELMD5=starterkit-$(VSN)-$(DIST)-$(ARCH)-$(WORDSIZE)-md5sum.txt
+REBAR?=./rebar
 
 OTPREL=$(shell erl -noshell -eval 'io:format(erlang:system_info(otp_release)), halt().')
 PLT=$(HOME)/.dialyzer_plt.$(OTPREL)
 
+ERLDIRS?=./deps
+ERLEUNITDIRS=`find $(ERLDIRS) -name .eunit -print | xargs echo` .eunit
+ERLQCDIRS=`find $(ERLDIRS) -name .qc -print | xargs echo` .qc
+
 DIALYZE_IGNORE_WARN?=dialyze-ignore-warnings.txt
 DIALYZE_NOSPEC_IGNORE_WARN?=dialyze-nospec-ignore-warnings.txt
 
-dialyzer=dialyzer -q --plt $(PLT) -Wunmatched_returns -r ./lib
-dialyzer-nospec=dialyzer -q --plt $(PLT) --no_spec -Wno_undefined_callbacks -r ./lib
-dialyzer-eunit=dialyzer -q --plt $(PLT) -Wunmatched_returns -r `find ./lib -name .eunit -print | xargs echo`
-dialyzer-eunit-nospec=dialyzer -q --plt $(PLT) --no_spec -Wno_undefined_callbacks -r `find ./lib -name .eunit -print | xargs echo`
+#TBD DIALYZER_OPTS?=-Wunmatched_returns -Werror_handling -Wrace_conditions -Wunderspecs
+DIALYZER_OPTS?=-Wunmatched_returns -Werror_handling -Wunderspecs
+DIALYZER_NOSPEC_OPTS?=-Wno_undefined_callbacks
+
+dialyzer=dialyzer -q --plt $(PLT) $(DIALYZER_OPTS) -r $(ERLDIRS)
+dialyzer-nospec=dialyzer -q --plt $(PLT) --no_spec $(DIALYZER_NOSPEC_OPTS) -r $(ERLDIRS)
+dialyzer-eunit=dialyzer -q --plt $(PLT) $(DIALYZER_OPTS) -r $(ERLEUNITDIRS)
+dialyzer-eunit-nospec=dialyzer -q --plt $(PLT) --no_spec $(DIALYZER_NOSPEC_OPTS) -r $(ERLEUNITDIRS)
+dialyzer-qc=dialyzer -q --plt $(PLT) $(DIALYZER_OPTS) -r $(ERLQCDIRS)
+dialyzer-qc-nospec=dialyzer -q --plt $(PLT) --no_spec $(DIALYZER_NOSPEC_OPTS) -r $(ERLQCDIRS)
 
 ifeq ($(shell uname -s),Darwin)
 	ifeq ($(shell uname -m),x86_64)
@@ -28,124 +32,93 @@ else
 	otp_configure_flags=
 endif
 
-.PHONY: all test \
-    bootstrap-package check-package package generate download update download-upstream \
-	compile compile-eqc compile-proper \
-	eunit-compile eqc-compile proper-compile \
-	eunit eqc proper \
-	doc \
-	build-plt check-plt \
+.PHONY: all clean deps compile xref doc test eunit eqc proper triq \
+	compile-for-eunit compile-for-eqc compile-for-proper compile-for-triq \
+	ctags etags \
 	dialyze dialyze-nospec \
 	update-dialyzer-baseline update-dialyzer-nospec-baseline \
 	dialyze-eunit dialyze-eunit-nospec \
 	dialyze-eqc dialyze-eqc-nospec \
 	dialyze-proper dialyze-proper-nospec \
-	ctags etags \
-	clean realclean distclean \
+	dialyze-triq dialyze-triq-nospec \
+	build-plt check-plt \
 	otp_make_release_tests otp_run_release_tests
 
 all: compile
 
-test: eunit
+deps:
+	$(REBAR) get-deps
 
-bootstrap-package: package
-	@echo "bootstrapping package: $(RELPKG) ..."
-	@-./tmp/starterkit/bin/starterkit stop &> /dev/null
-	@rm -rf ./tmp
-	@mkdir ./tmp
-	tar -C ./tmp -xzf ../$(RELTGZ)
-	./tmp/starterkit/bin/starterkit start
-	@sleep 1
-
-check-package: bootstrap-package
-	@echo "checking package: $(RELPKG) ..."
-	./tmp/starterkit/bin/starterkit ping
-	./tmp/starterkit/bin/starterkit stop
-
-package: generate
-	@echo "packaging: $(RELPKG) ..."
-	@rm -f ../$(RELTGZ) ../$(RELMD5)
-	@tar -C ./rel -czf ../$(RELTGZ) starterkit
-	@(cd .. && (md5sum $(RELTGZ) 2> /dev/null || md5 -r $(RELTGZ) 2> /dev/null) | tee $(RELMD5))
-	@(cd .. && ls -l $(RELTGZ) $(RELMD5))
-
-generate: clean compile
-	@echo "generating: $(RELPKG) ..."
-	@find ./lib -name svn -type l | xargs rm -f
-	@find ./lib -name rr-cache -type l | xargs rm -f
-	./rebar generate
-	@perl -i -pe 's/%% (.* generated) at .*//g;' rel/starterkit/releases/*/*.{rel,script}
-
-download:
-	@echo "downloading: $(RELPKG) ..."
-	./rebar get-deps
-
-update:
-	@echo "updating: $(RELPKG) ..."
-	./rebar update-deps
-
-download-upstream: download
-	@echo "downloading upstream: $(RELPKG) rebar ..."
-	(cd ./lib/rebar; git remote rm upstream 2> /dev/null; git remote add upstream -f --tags git://github.com/basho/rebar.git)
-	@echo "downloading upstream: $(RELPKG) edown ..."
-	(cd ./lib/edown; git remote rm upstream 2> /dev/null; git remote add upstream -f --tags git://github.com/esl/edown.git)
-	@echo "downloading upstream: $(RELPKG) eper ..."
-	(cd ./lib/eper; git remote rm upstream 2> /dev/null; git remote add upstream -f --tags git://github.com/massemanet/eper.git)
-	@echo "downloading upstream: $(RELPKG) meck ..."
-	(cd ./lib/meck; git remote rm upstream 2> /dev/null; git remote add upstream -f --tags git://github.com/eproxus/meck.git)
-	@echo "downloading upstream: $(RELPKG) proper ..."
-	(cd ./lib/proper; git remote rm upstream 2> /dev/null; git remote add upstream -f --tags git://github.com/manopapad/proper.git)
+clean:
+	$(REBAR) clean
+	@rm -f TAGS
 
 compile:
-	@echo "compiling: $(RELPKG) ..."
-	./rebar compile
+	$(REBAR) compile
 
-compile-eqc:
-	@echo "compiling-eqc: $(RELPKG) ..."
-	./rebar compile -D QC -D QC_EQC
+xref:
+	$(REBAR) xref
 
-compile-proper:
-	@echo "compiling-proper: $(RELPKG) ..."
-	./rebar compile -D QC -D QC_PROPER
+doc:
+	@rm -rf README.md doc/edoc-info doc/*.md
+	$(REBAR) -C rebar.config.doc get-deps compile
+	$(REBAR) -C rebar.config.doc doc
 
-eunit-compile: compile
-	@echo "eunit test compiling: $(RELPKG) ..."
-	./rebar eunit-compile
+test: eunit
 
-eqc-compile: compile-eqc
-	@echo "eqc test compiling: $(RELPKG) ..."
-	./rebar eunit-compile -D QC -D QC_EQC
+eunit: compile-for-eunit
+	$(REBAR) eunit
 
-proper-compile: compile-proper
-	@echo "proper test compiling: $(RELPKG) ..."
-	./rebar eunit-compile -D QC -D QC_PROPER
+eqc: compile-for-eqc
+	$(REBAR) eqc
 
-eunit: eunit-compile
-	@echo "eunit testing: $(RELPKG) ..."
-	./rebar eunit
+proper: compile-for-proper
+	@echo "rebar does not implement a 'proper' command" && false
 
-eqc: eqc-compile
-	@echo "eqc testing: $(RELPKG) ... not implemented yet"
+triq: compile-for-triq
+	$(REBAR) triq
 
-proper: proper-compile
-	@echo "proper testing: $(RELPKG) ... not implemented yet"
+compile-for-eunit:
+	$(REBAR) compile eunit compile_only=true
 
-doc: compile
-	@echo "edoc generating: $(RELPKG) ..."
-	./rebar doc
+compile-for-eqc:
+	$(REBAR) -D QC -D QC_EQC compile eqc compile_only=true
 
-build-plt: $(PLT)
+compile-for-proper:
+	$(REBAR) -D QC -D QC_PROPER compile eqc compile_only=true
 
-check-plt: $(PLT)
-	dialyzer -q --plt $(PLT) --check_plt
+compile-for-triq:
+	$(REBAR) -D QC -D QC_TRIQ compile triq compile_only=true
+
+#
+# tags
+#
+
+ctags:
+	find $(ERLDIRS) -name "*.[he]rl" -print | fgrep -v .eunit | fgrep -v .qc | ctags -
+	find $(ERLDIRS) -name "*.app.src" -print | fgrep -v .eunit | fgrep -v .qc | ctags -a -
+	find $(ERLDIRS) -name "*.config" -print | fgrep -v .eunit | fgrep -v .qc | ctags -a -
+	find $(ERLDIRS) -name "*.[ch]" -print | fgrep -v .eunit | fgrep -v .qc | ctags -a -
+	find $(ERLDIRS) -name "*.cc" -print | fgrep -v .eunit | fgrep -v .qc | ctags -a -
+	find $(ERLDIRS) -name "*.con" -print | fgrep -v .eunit | fgrep -v .qc | ctags -a -
+
+etags:
+	find $(ERLDIRS) -name "*.[he]rl" -print | fgrep -v .eunit | fgrep -v .qc | etags -
+	find $(ERLDIRS) -name "*.app.src" -print | fgrep -v .eunit | fgrep -v .qc | etags -a -
+	find $(ERLDIRS) -name "*.config" -print | fgrep -v .eunit | fgrep -v .qc | etags -a -
+	find $(ERLDIRS) -name "*.[ch]" -print | fgrep -v .eunit | fgrep -v .qc | etags -a -
+	find $(ERLDIRS) -name "*.cc" -print | fgrep -v .eunit | fgrep -v .qc | etags -a -
+	find $(ERLDIRS) -name "*.con" -print | fgrep -v .eunit | fgrep -v .qc | etags -a -
+
+#
+# dialyzer
+#
 
 dialyze: build-plt clean compile
-	@echo "dialyzing w/spec: $(RELPKG) ..."
-	$(dialyzer) | grep -v '^ *$$' | tee $(DIALYZE_IGNORE_WARN).log | fgrep -v -f $(DIALYZE_IGNORE_WARN)
+	-$(dialyzer) | grep -v '^ *$$' | tee $(DIALYZE_IGNORE_WARN).log | fgrep -v -f $(DIALYZE_IGNORE_WARN)
 
 dialyze-nospec: build-plt clean compile
-	@echo "dialyzing w/o spec: $(RELPKG) ..."
-	$(dialyzer-nospec) | grep -v '^ *$$' | tee $(DIALYZE_NOSPEC_IGNORE_WARN).log | fgrep -v -f $(DIALYZE_NOSPEC_IGNORE_WARN)
+	-$(dialyzer-nospec) | grep -v '^ *$$' | tee $(DIALYZE_NOSPEC_IGNORE_WARN).log | fgrep -v -f $(DIALYZE_NOSPEC_IGNORE_WARN)
 
 update-dialyzer-baseline: dialyze
 	mv -f $(DIALYZE_IGNORE_WARN).log $(DIALYZE_IGNORE_WARN)
@@ -153,62 +126,41 @@ update-dialyzer-baseline: dialyze
 update-dialyzer-nospec-baseline: dialyze-nospec
 	mv -f $(DIALYZE_NOSPEC_IGNORE_WARN).log $(DIALYZE_NOSPEC_IGNORE_WARN)
 
-dialyze-eunit: build-plt clean eunit-compile
-	@echo "dialyzing .eunit w/spec: $(RELPKG) ..."
-	$(dialyzer-eunit) | grep -v '^ *$$' | tee $(DIALYZE_IGNORE_WARN).log | fgrep -v -f $(DIALYZE_IGNORE_WARN)
+dialyze-eunit: build-plt clean compile-for-eunit
+	-$(dialyzer-eunit) | grep -v '^ *$$' | tee $(DIALYZE_IGNORE_WARN).log | fgrep -v -f $(DIALYZE_IGNORE_WARN)
 
-dialyze-eunit-nospec: build-plt clean eunit-compile
-	@echo "dialyzing .eunit w/o spec: $(RELPKG) ..."
-	./rebar eunit-compile
-	$(dialyzer-eunit-nospec) | grep -v '^ *$$' | tee $(DIALYZE_NOSPEC_IGNORE_WARN).log | fgrep -v -f $(DIALYZE_NOSPEC_IGNORE_WARN)
+dialyze-eunit-nospec: build-plt clean compile-for-eunit
+	-$(dialyzer-eunit-nospec) | grep -v '^ *$$' | tee $(DIALYZE_NOSPEC_IGNORE_WARN).log | fgrep -v -f $(DIALYZE_NOSPEC_IGNORE_WARN)
 
-dialyze-eqc: build-plt clean eqc-compile
-	@echo "dialyzing .eqc w/spec: $(RELPKG) ..."
-	$(dialyzer-eunit) | grep -v '^ *$$' | tee $(DIALYZE_IGNORE_WARN).log | fgrep -v -f $(DIALYZE_IGNORE_WARN)
+dialyze-eqc: build-plt clean compile-for-eqc
+	-$(dialyzer-qc) | grep -v '^ *$$' | tee $(DIALYZE_IGNORE_WARN).log | fgrep -v -f $(DIALYZE_IGNORE_WARN)
 
-dialyze-eqc-nospec: build-plt clean eqc-compile
-	@echo "dialyzing .eqc w/o spec: $(RELPKG) ..."
-	./rebar eqc-compile
-	$(dialyzer-eunit-nospec) | grep -v '^ *$$' | tee $(DIALYZE_NOSPEC_IGNORE_WARN).log | fgrep -v -f $(DIALYZE_NOSPEC_IGNORE_WARN)
+dialyze-eqc-nospec: build-plt clean compile-for-eqc
+	-$(dialyzer-qc-nospec) | grep -v '^ *$$' | tee $(DIALYZE_NOSPEC_IGNORE_WARN).log | fgrep -v -f $(DIALYZE_NOSPEC_IGNORE_WARN)
 
-dialyze-proper: build-plt clean proper-compile
-	@echo "dialyzing .proper w/spec: $(RELPKG) ..."
-	$(dialyzer-eunit) | grep -v '^ *$$' | tee $(DIALYZE_IGNORE_WARN).log | fgrep -v -f $(DIALYZE_IGNORE_WARN)
+dialyze-proper: build-plt clean compile-for-proper
+	-$(dialyzer-qc) | grep -v '^ *$$' | tee $(DIALYZE_IGNORE_WARN).log | fgrep -v -f $(DIALYZE_IGNORE_WARN)
 
-dialyze-proper-nospec: build-plt clean proper-compile
-	@echo "dialyzing .proper w/o spec: $(RELPKG) ..."
-	./rebar proper-compile
-	$(dialyzer-eunit-nospec) | grep -v '^ *$$' | tee $(DIALYZE_NOSPEC_IGNORE_WARN).log | fgrep -v -f $(DIALYZE_NOSPEC_IGNORE_WARN)
+dialyze-proper-nospec: build-plt clean compile-for-proper
+	-$(dialyzer-qc-nospec) | grep -v '^ *$$' | tee $(DIALYZE_NOSPEC_IGNORE_WARN).log | fgrep -v -f $(DIALYZE_NOSPEC_IGNORE_WARN)
 
-ctags:
-	find ./lib -name "*.[he]rl" -print | fgrep -v .eunit | ctags -
-	find ./lib -name "*.app.src" -print | fgrep -v .eunit | ctags -a -
-	find ./lib -name "*.config" -print | fgrep -v .eunit | ctags -a -
-	find ./lib -name "*.[ch]" -print | fgrep -v .eunit | ctags -a -
-	find ./lib -name "*.cc" -print | fgrep -v .eunit | ctags -a -
+dialyze-triq: build-plt clean compile-for-triq
+	-$(dialyzer-qc) | grep -v '^ *$$' | tee $(DIALYZE_IGNORE_WARN).log | fgrep -v -f $(DIALYZE_IGNORE_WARN)
 
-etags:
-	find ./lib -name "*.[he]rl" -print | fgrep -v .eunit | etags -
-	find ./lib -name "*.app.src" -print | fgrep -v .eunit | etags -a -
-	find ./lib -name "*.config" -print | fgrep -v .eunit | etags -a -
-	find ./lib -name "*.[ch]" -print | fgrep -v .eunit | etags -a -
-	find ./lib -name "*.cc" -print | fgrep -v .eunit | etags -a -
+dialyze-triq-nospec: build-plt clean compile-for-triq
+	-$(dialyzer-qc-nospec) | grep -v '^ *$$' | tee $(DIALYZE_NOSPEC_IGNORE_WARN).log | fgrep -v -f $(DIALYZE_NOSPEC_IGNORE_WARN)
 
-clean:
-	@echo "cleaning: $(RELPKG) ..."
-	./rebar clean
+#
+# dialyzer PLT
+#
 
-realclean: clean
-	@echo "realcleaning: $(RELPKG) ..."
-	rm -f $(PLT) TAGS
+build-plt: $(PLT)
 
-distclean:
-	@echo "distcleaning: $(RELPKG) ..."
-	git clean -fdx
+check-plt: $(PLT)
+	dialyzer -q --plt $(PLT) --check_plt
 
 $(PLT):
-	@echo "building: $(PLT) ..."
-	dialyzer -q --build_plt --output_plt $(PLT) --apps \
+	-dialyzer -q --build_plt --output_plt $(PLT) --apps \
 		asn1 \
 		compiler \
 		crypto \
@@ -235,17 +187,24 @@ $(PLT):
 		webtool \
 		xmerl
 
-# rm -rf rebar rebar.git
-# . ~/.kerl/installations/r13b04/activate
-# make -f rebar.mk rebar
-# git commit -m "Update rebar (`./rebar -V | cut -d ' ' -f 6`)" rebar
+#
+# rebar
+#
+
+# $ rm -rf rebar rebar.git
+# $ make -f rebar.mk rebar
 rebar: rebar.git
-	(cd $(CURDIR)/rebar.git && make clean && make && cp -f rebar ..)
-	./rebar -V
+	(source ~/.kerl/installations/r13b04/activate && cd $(CURDIR)/rebar.git && make clean && make && cp -f rebar ..)
+	$(REBAR) -V
+	echo git commit -m \"Update rebar \(`./rebar -V | cut -d ' ' -f 6`\)\" rebar
 
 rebar.git:
 	rm -rf $(CURDIR)/rebar
 	git clone git://github.com/norton/rebar.git rebar.git
+
+#
+# Erlang/OTP
+#
 
 otp: otp.git
 	make -C $(CURDIR)/otp.git install
@@ -255,7 +214,7 @@ otp.git:
 	mkdir -p $(CURDIR)/otp
 	git clone git://github.com/erlang/otp.git otp.git
 	(cd $(CURDIR)/otp.git && \
-		git co OTP_R15B01 && \
+		git co OTP_R15B03-1 && \
 		./otp_build autoconf && \
 		./configure \
 			--disable-hipe \
