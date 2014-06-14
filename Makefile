@@ -175,7 +175,6 @@ $(PLT):
 		inets \
 		kernel \
 		mnesia \
-		observer \
 		parsetools \
 		public_key \
 		runtime_tools \
