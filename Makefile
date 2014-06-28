@@ -213,7 +213,7 @@ otp.git:
 	mkdir -p $(CURDIR)/otp
 	git clone git://github.com/erlang/otp.git otp.git
 	(cd $(CURDIR)/otp.git && \
-		git co OTP_R15B03-1 && \
+		git co OTP-17.1 && \
 		./otp_build autoconf && \
 		./configure \
 			--disable-hipe \
