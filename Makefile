@@ -1,5 +1,5 @@
 
-REBAR?=./rebar
+REBAR?=./rebar3
 
 OTPREL=$(shell erl -noshell -eval 'io:format(erlang:system_info(otp_release)), halt().')
 PLT=$(HOME)/.dialyzer_plt.$(OTPREL)
@@ -15,8 +15,8 @@ DIALYZE_NOSPEC_IGNORE_WARN?=dialyze-nospec-ignore-warnings.txt
 DIALYZER_OPTS?=-Wunmatched_returns -Werror_handling -Wunderspecs
 DIALYZER_NOSPEC_OPTS?=-Wno_undefined_callbacks
 
-dialyzer=dialyzer -q --plt $(PLT) $(DIALYZER_OPTS) -r $(ERLDIRS)
-dialyzer-nospec=dialyzer -q --plt $(PLT) --no_spec $(DIALYZER_NOSPEC_OPTS) -r $(ERLDIRS)
+dialyzer=dialyzer -q --plt $(PLT) $(DIALYZER_OPTS) -r $(ERLDIRS)/*/ebin
+dialyzer-nospec=dialyzer -q --plt $(PLT) --no_spec $(DIALYZER_NOSPEC_OPTS) -r $(ERLDIRS)/*/ebin
 dialyzer-eunit=dialyzer -q --plt $(PLT) $(DIALYZER_OPTS) -r $(ERLEUNITDIRS)
 dialyzer-eunit-nospec=dialyzer -q --plt $(PLT) --no_spec $(DIALYZER_NOSPEC_OPTS) -r $(ERLEUNITDIRS)
 dialyzer-qc=dialyzer -q --plt $(PLT) $(DIALYZER_OPTS) -r $(ERLQCDIRS)
@@ -46,7 +46,7 @@ endif
 all: compile
 
 deps:
-	$(REBAR) get-deps
+	$(REBAR) deps
 
 clean:
 	$(REBAR) clean
@@ -60,7 +60,7 @@ xref:
 
 doc:
 	@rm -rf README.md doc/edoc-info doc/*.md
-	$(REBAR) -C rebar.config.doc get-deps compile
+	$(REBAR) -C rebar.config.doc deps compile
 	$(REBAR) -C rebar.config.doc doc
 
 test: eunit
@@ -172,7 +172,7 @@ $(PLT):
 		stdlib \
 		syntax_tools \
 		tools \
-		webtool \
+		wx \
 		xmerl
 
 #

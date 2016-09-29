@@ -1,5 +1,7 @@
 TAGS
-erl_crash.dump
+_build/
 deps/
+erl_crash.dump
+rebar.lock
 rel/starterkit/
 tmp/starterkit/
