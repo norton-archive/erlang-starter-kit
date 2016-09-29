@@ -32,15 +32,14 @@ else
 	otp_configure_flags=
 endif
 
-.PHONY: all clean deps compile xref doc test eunit eqc proper triq \
-	compile-for-eunit compile-for-eqc compile-for-proper compile-for-triq \
+.PHONY: all clean deps compile xref doc test eunit eqc proper \
+	compile-for-eunit compile-for-eqc compile-for-proper \
 	ctags etags \
 	dialyze dialyze-nospec \
 	update-dialyzer-baseline update-dialyzer-nospec-baseline \
 	dialyze-eunit dialyze-eunit-nospec \
 	dialyze-eqc dialyze-eqc-nospec \
 	dialyze-proper dialyze-proper-nospec \
-	dialyze-triq dialyze-triq-nospec \
 	build-plt check-plt \
 	otp_make_release_tests otp_run_release_tests
 
@@ -75,9 +74,6 @@ eqc: compile-for-eqc
 proper: compile-for-proper
 	@echo "rebar does not implement a 'proper' command" && false
 
-triq: compile-for-triq
-	$(REBAR) triq
-
 compile-for-eunit:
 	$(REBAR) compile eunit compile_only=true
 
@@ -87,8 +83,6 @@ compile-for-eqc:
 compile-for-proper:
 	$(REBAR) -D QC -D QC_PROPER compile eqc compile_only=true
 
-compile-for-triq:
-	$(REBAR) -D QC -D QC_TRIQ compile triq compile_only=true
 
 #
 # tags
@@ -144,11 +138,6 @@ dialyze-proper: build-plt clean compile-for-proper
 dialyze-proper-nospec: build-plt clean compile-for-proper
 	-$(dialyzer-qc-nospec) | grep -v '^ *$$' | tee $(DIALYZE_NOSPEC_IGNORE_WARN).log | fgrep -v -f $(DIALYZE_NOSPEC_IGNORE_WARN)
 
-dialyze-triq: build-plt clean compile-for-triq
-	-$(dialyzer-qc) | grep -v '^ *$$' | tee $(DIALYZE_IGNORE_WARN).log | fgrep -v -f $(DIALYZE_IGNORE_WARN)
-
-dialyze-triq-nospec: build-plt clean compile-for-triq
-	-$(dialyzer-qc-nospec) | grep -v '^ *$$' | tee $(DIALYZE_NOSPEC_IGNORE_WARN).log | fgrep -v -f $(DIALYZE_NOSPEC_IGNORE_WARN)
 
 #
 # dialyzer PLT
